@@ -4,8 +4,8 @@ bio:                'A blog about code, tech and everything.'
 description:        "2A is a blog about programming and technology, with the occasional math when I get nostalgic."
 reading_time:       true
 words_per_minute:   200
-logo_black:         'assets/img/logo_black.png'
-logo_white:         'assets/img/logo_white.png'
+logo_black:         'assets/img/logo_black_on_alpha_home.png'
+logo_white:         'assets/img/logo_white_on_alpha_menu.png'
 background:         'assets/img/background.jpg'
 tiled_bg:           false   # Set this true if you want to tile your background image, otherwise it will be covered
 locale:             en_US
