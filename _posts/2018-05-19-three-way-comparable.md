@@ -8,7 +8,7 @@ tags: [swift, c++]
 
 Swift's __protocols__ and their __extensions__ make it one of the most developer-friendly languages in the world. One great example is the `Comparable` protocol. By simply implementing the `==` and `<` operators for your custom types, conformance with `Comparable` gives you the operators `!=`, `>`, `<=` and `>=` for free. This way you can make your intent clearer when you write code, using statements like `if x <= y { ... }` instead of `if x < y || x == y { ... }`, or even worse (but more efficient) `if !(y < x) { ... }`.
 
-The default implementations you get are also very efficient. Each one of the operators `>`, `<=` and `>=` will call your custom implementation of `<` exactly once, and the operator `!=` will call your custom implementation of `==` exactly once. Not bad. Add to that the fact that swift 4.1 (and later) can automatically synthesize the `==` operator if you declare conformance with `Equatable`, and your programming comfort is optimized. Great, see you next week. Unless...
+The default implementations you get are also very efficient. Each one of the operators `>`, `<=` and `>=` will call your custom implementation of `<` exactly once, and the operator `!=` will call your custom implementation of `==` exactly once. Not bad. Add to that the fact that swift 4.1 (and later) can automatically synthesise the `==` operator if you declare conformance with `Equatable`, and your programming comfort is optimised. Great, see you next week. Unless...
 
 ...you want to react differently to each case `x < y`, `x > y` and `x == y` and your comparison operation is very expensive. In other words, suppose you have a comparable type `MyType` and somewhere in your code you use it as follows:
 
@@ -112,7 +112,7 @@ extension Pair: ThreeWayComparable {
 
 extension Int: ThreeWayComparable {}
 
-// Depth-14 nesting means we're holding 2^14 = 16384 `Int`s in each
+// Depth-14 nesting means we're holding 2^14 = 16384 `Int`'s in each
 // `ComparePair` instance. That's 128 KB on a 64-Bit machine.
 typealias ComparePair =
 	Pair<
@@ -132,7 +132,7 @@ typealias ComparePair =
 															Int>>>>>>>>>>>>>>
 ```
 
-My machine started to give up at depth 15 (i.e. 15 nested `Pair`s) and either didn't manage to compile the code or crashed with a "bad access" exception when running. We still need a reasonable way of initializing `ComparePair`.
+My machine started to give up at depth 15 (i.e. 15 nested `Pair`'s) and either didn't manage to compile the code or crashed with a "bad access" exception when running. We still need a reasonable way of initialising `ComparePair`.
 
 ```swift
 protocol DefaultInitializable {
@@ -174,22 +174,47 @@ class ThreeWayComparableTests: XCTestCase {
 }
 ```
 
-Note that we're testing a worst-case scenario on purpose here: We define `rhs` such that it is less than `lhs` but this can only be asserted at the very end of the comparison. Moreover, inside the `measure`-block we first check the wrong option `lhs < rhs`, so we always have to perform two comparisons. On my machine I get a pretty stable average of about 0.014 seconds. If I replace the `-= 1` with a `+= 1`, so that the first comparison in the `measure`-block is the correct one, I get a pretty stable average of about 0.007 seconds, which is exactly what we expect (i.e. half of the time needed for the previous version).
-
-Now we repeat the tests replacing the `measure`-block with
+We'll call this the _decreasing_ case. We're also interested in the _increasing_ case, where we replace the `-= 1` with `+= 1` (and fix the final `XCTAssertEqual`) and the _equal_ case, where we do not modify `rhs` at all (again, fixing the final assertion). Moreover, in each one of these three cases we want to examine the effects of replacing the _traditional comparison_ in the `measure`-block with a _three-way comparison_:
 
 ```swift
 		measure {
 			order = lhs <=> rhs
 		}
 ```
+Using the _traditional comparison_, the runtime is strongly dependent on which of the three cases we're testing. In the _decreasing_ and the _equal_ cases, our first check (`lhs < rhs`) is false, so we have to perform a second comparison. As expected, the runtime is about 2x longer than in the _increasing_ case. On my machine the results were about 0.014 seconds on average in the _decreasing_ and _equal_ cases, against about 0.007 seconds on average in the _increasing_ case. All tests had very stable measurements.
 
-The result is a stable average of 0.0017 seconds. That's more than 8 times faster than before in the worst-case (`-= 1`) and more than 4 times faster in the second version (`+= 1`)! And as expected, now that we're using the *spaceship*-operator it makes no difference whether we write `-= 1` or `+= 1` or simply leave `rhs` identical to `lhs`. The measured time is not affected.
+Using _three-way comparison_, the runtime in all three cases is essentially the same. On my machine the tests resulted in about 0.002 seconds on average.
 
-I'd like to play down this "achievement" a little bit, though. I think the important message here is that when you want to treat all three "ordering cases" differently, using only the usual operators from the `Comparable` protocol will leave your program's performance dependent on luck (if the first case you test against happens to be the wrong one, you are forced to perform a whole new comparison), while the `ThreeWayComparable` protocol gives you a consistent runtime, independent of the outcome of the performed comparisons. The fact that I got a 4x speed-up for each isolated comparison in my tests is probably the result of very complex compiler optimizations and language implementation details. It might be a phenomenon specific to my example, it might be platform dependent, it might change drastically in a few years... who knows?
+A word of caution: I believe the "achievement" here is the fact that the `<=>` operation is __not slower__ than the `<` operation, and has the advantage that we never have to perform a second comparison to find out exactly how two instances are ordered. The fact that a single `<=>` operation was also almost 4x faster than a single `<` operation could be specific to this example. The performance is affected by the machine, compiler optimisations and implementation details of the language, and in different situations the speed-up might be smaller, or even non-existent, as the next example shows.
 
-Of course, the intent of using the new protocol was mainly to *improve* performance *on average* by never having to compare the same pair of instances twice. Nevertheless, the consistency of the runtime is also a very atractive quality in the field of cryptography, where so-called *timing attacks* attempt to use the amount of time a program takes to perform some computation, to figure out information about its input or its output or some intermediate value, when these should be kept secret.
+I ran similar tests simply comparing arrays of 16384 `Int`'s (using the lexicographical order). For the _traditional comparison_ I used the method `Array.lexicographicallyPrecedes(...)`, from the standard library, while the `<=>` operator was implemented as below:
 
-## To summarize...
+```swift
+extension Array: ThreeWayComparable where Element: ThreeWayComparable {
+	public static func <=> (lhs: Array<Element>, rhs: Array<Element>) -> Order {
+		for index in lhs.indices {
+			if index == rhs.count {
+				return .decreasing
+			} else {
+				let order = lhs[index] <=> rhs[index]
 
-By implementing  the `ThreeWayComparable` protocol for your custom types, which requires you to implement a single binary operator, you get a fast and runtime-consistent way of finding out whether a pair of instances is in increasing or decreasing order, or whether the two instances are equal, all in a single operation. If you then simply declare your custom type to conform to `Comparable`, you get that conformance (and all the neat operators that come with it) for free. Oh, and we should try to learn from our programming ancestors more often.
+				if order != .equal {
+					return order
+				}
+			}
+		}
+
+		return (lhs.count < rhs.count) ? .increasing : .equal
+	}
+}
+```
+
+In this case, each call of `lexicographicallyPrecedes` took approximately 0.005 seconds, while calling the `<=>` operator took about 0.004 seconds on average, which is a much more modest speed-up, and is absolutely insignificant because my tests were not designed to measure with such precision. But again, in the worst-case scenario the runtime doubled for _traditional comparison_ but remained unchanged for _three-way comparison_, justifying the use of this protocol.
+
+---
+
+Of course, the intent of using the new protocol was mainly to improve performance *on average* by never having to compare the same pair of instances twice. Nevertheless, the consistency of the runtime is also a very attractive quality in the field of cryptography, where so-called *timing attacks* attempt to use the amount of time a program takes to perform some computation, to figure out information about its input or its output or some intermediate value, when these should be kept secret.
+
+## To summarise...
+
+By implementing  the `ThreeWayComparable` protocol for your custom types, which requires you to implement a single binary operator, you get a fast and runtime-consistent way of finding out whether a pair of instances is in increasing or decreasing order, or whether the two instances are equal, all in a single operation. If you then simply declare your custom type to conform to `Comparable`, you get that conformance (and all the neat operators that come with it) for free. Oh, and we should never underestimate how much we can learn from older, battle-tested programming languages.
