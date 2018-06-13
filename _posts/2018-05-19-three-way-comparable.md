@@ -1,9 +1,9 @@
 ---
 layout: post
 title: The "three-way comparable" protocol
-date: 2018-05-10
+date: 2018-06-12
 excerpt: "Efficient, automagically generated comparison operators in swift."
-tags: [swift, c++]
+tags: [Swift, C++]
 ---
 
 Swift's __protocols__ and their __extensions__ make it one of the most developer-friendly languages in the world. One great example is the `Comparable` protocol. By simply implementing the `==` and `<` operators for your custom types, conformance with `Comparable` gives you the operators `!=`, `>`, `<=` and `>=` for free. This way you can make your intent clearer when you write code, using statements like `if x <= y { ... }` instead of `if x < y || x == y { ... }`, or even worse (but more efficient) `if !(y < x) { ... }`.
